@@ -134,6 +134,24 @@ test(`allows to wait for effects created with waitUntil`, async () => {
 })
 
 test(`fails when writing to the response socket throws`, async () => {
+  const originalJestListeners = {
+    uncaughtException: [],
+    unhandledRejection: [],
+  }
+  const originalProcess = (process as any)._original()
+  Object.keys(originalJestListeners).forEach((event) => {
+    originalProcess.listeners(event).forEach((listener: any) => {
+      ;(originalJestListeners as any)[event].push(listener)
+      originalProcess.off(event, listener)
+    })
+  })
+
+  const uncaughtErrorPromise = new Promise((resolve) => {
+    ;(process as any)._original().on('unhandledRejection', (reason: any) => {
+      console.error('unhandledRejection', reason)
+    })
+  })
+
   const runtime = new EdgeRuntime()
   runtime.evaluate(`
     addEventListener('fetch', event => {
@@ -159,4 +177,15 @@ test(`fails when writing to the response socket throws`, async () => {
   expect(response.status).toEqual(200)
   const text = await response.text()
   expect(text).toEqual('hi there')
+
+  await expect(uncaughtErrorPromise).resolves.toEqual('xxx')
+
+  let listener
+  Object.keys(originalJestListeners).forEach((event) => {
+    while (
+      (listener = (originalJestListeners as any)[event].pop()) !== undefined
+    ) {
+      ;(process as any)._original().on(event, listener)
+    }
+  })
 })
