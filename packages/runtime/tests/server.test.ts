@@ -134,41 +134,91 @@ test(`allows to wait for effects created with waitUntil`, async () => {
   expect(resolved).toContain('done')
 })
 
-test.only(
-  `fails when writing to the response socket throws`,
+// CF only allows Uint8Array to be written to readable stream
+const crazyTypes: unknown[] = [
+  1,
+  'String',
+  true,
+  // ignore we currently don't know what Err CF emits for undefined,
+  // ignore we currently don't know what Err CF emits for null,
+  { b: 1 },
+  [1],
+]
+for (const crazyType of crazyTypes) {
+  test(
+    `fails when writing to the response socket throws:${JSON.stringify(
+      crazyType
+    )}`,
+    enableTestUncaughtException(async (process) => {
+      const unhandledFn = jest.fn()
+      process!.on('unhandledRejection', unhandledFn)
+
+      const runtime = new EdgeRuntime()
+      runtime.evaluate(`
+        addEventListener('fetch', event => {
+          const readable = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('hi there'));
+              controller.enqueue(${JSON.stringify(crazyType)});
+              controller.close();
+            }
+          });
+
+          return event.respondWith(
+            new Response(readable, {
+              headers: { 'x-foo': 'bar' },
+              status: 200,
+            })
+          )
+        })
+      `)
+      server = await runServer({ runtime })
+      const response = await fetch(server.url)
+      expect(response.status).toEqual(200)
+      const text = await response.text()
+      expect(text).toEqual('hi there')
+
+      expect(unhandledFn).toHaveBeenCalledTimes(1)
+      expect(unhandledFn.mock.calls[0][0].toString()).toEqual(
+        'TypeError: This ReadableStream did not return bytes.'
+      )
+    })
+  )
+}
+
+test(
+  `do not fail writing to the response socket Uint8Array`,
   enableTestUncaughtException(async (process) => {
     const unhandledFn = jest.fn()
     process!.on('unhandledRejection', unhandledFn)
 
     const runtime = new EdgeRuntime()
     runtime.evaluate(`
-    addEventListener('fetch', event => {
-      const readable = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode('hi there'));
-          controller.enqueue(1);
-          controller.close();
-        }
-      });
+      addEventListener('fetch', event => {
+        const readable = new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(encoder.encode('hi there1\\n'));
+            controller.enqueue(encoder.encode('hi there2\\n'));
+            controller.enqueue(encoder.encode('hi there3\\n'));
+            controller.close();
+          }
+        });
 
-      return event.respondWith(
-        new Response(readable, {
-          headers: { 'x-foo': 'bar' },
-          status: 200,
-        })
-      )
-    })
-  `)
-
+        return event.respondWith(
+          new Response(readable, {
+            headers: { 'x-foo': 'bar' },
+            status: 200,
+          })
+        )
+      })
+    `)
     server = await runServer({ runtime })
     const response = await fetch(server.url)
     expect(response.status).toEqual(200)
     const text = await response.text()
-    expect(text).toEqual('hi there')
+    expect(text).toEqual('hi there1\nhi there2\nhi there3\n')
 
-    expect(unhandledFn).toHaveBeenCalledTimes(1)
-    expect(unhandledFn.mock.calls[0][0].toString()).toEqual(
-      'TypeError [ERR_INVALID_ARG_TYPE]: The "chunk" argument must be of type string or an instance of Buffer or Uint8Array. Received type number (1)'
-    )
+    expect(unhandledFn).toHaveBeenCalledTimes(0)
   })
 )
