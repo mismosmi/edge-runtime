@@ -80,8 +80,9 @@ export function createHandler<T extends EdgeContext>(options: Options<T>) {
         const code = `${res.statusCode} ${status[res.statusCode]}`
         options.logger?.debug(`${subject} → ${code} in ${time}`)
         res.end()
-      } catch (error) {
-        console.error(error)
+        // }
+        //  catch (error) {
+        // console.error(error)
       } finally {
         res.end()
       }

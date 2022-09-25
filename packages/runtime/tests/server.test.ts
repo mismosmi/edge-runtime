@@ -1,6 +1,7 @@
 import { EdgeRuntime } from '../src/edge-runtime'
 import { runServer } from '../src/server'
 import fetch from 'node-fetch'
+import { enableTestUncaughtException } from './jest-enable-test-uncaught-exception'
 
 let server: Awaited<ReturnType<typeof runServer>>
 afterEach(() => server.close())
@@ -133,27 +134,14 @@ test(`allows to wait for effects created with waitUntil`, async () => {
   expect(resolved).toContain('done')
 })
 
-test(`fails when writing to the response socket throws`, async () => {
-  const originalJestListeners = {
-    uncaughtException: [],
-    unhandledRejection: [],
-  }
-  const originalProcess = (process as any)._original()
-  Object.keys(originalJestListeners).forEach((event) => {
-    originalProcess.listeners(event).forEach((listener: any) => {
-      ;(originalJestListeners as any)[event].push(listener)
-      originalProcess.off(event, listener)
-    })
-  })
+test.only(
+  `fails when writing to the response socket throws`,
+  enableTestUncaughtException(async (process) => {
+    const unhandledFn = jest.fn()
+    process!.on('unhandledRejection', unhandledFn)
 
-  const uncaughtErrorPromise = new Promise((resolve) => {
-    ;(process as any)._original().on('unhandledRejection', (reason: any) => {
-      console.error('unhandledRejection', reason)
-    })
-  })
-
-  const runtime = new EdgeRuntime()
-  runtime.evaluate(`
+    const runtime = new EdgeRuntime()
+    runtime.evaluate(`
     addEventListener('fetch', event => {
       const readable = new ReadableStream({
         start(controller) {
@@ -172,20 +160,15 @@ test(`fails when writing to the response socket throws`, async () => {
     })
   `)
 
-  server = await runServer({ runtime })
-  const response = await fetch(server.url)
-  expect(response.status).toEqual(200)
-  const text = await response.text()
-  expect(text).toEqual('hi there')
+    server = await runServer({ runtime })
+    const response = await fetch(server.url)
+    expect(response.status).toEqual(200)
+    const text = await response.text()
+    expect(text).toEqual('hi there')
 
-  await expect(uncaughtErrorPromise).resolves.toEqual('xxx')
-
-  let listener
-  Object.keys(originalJestListeners).forEach((event) => {
-    while (
-      (listener = (originalJestListeners as any)[event].pop()) !== undefined
-    ) {
-      ;(process as any)._original().on(event, listener)
-    }
+    expect(unhandledFn).toHaveBeenCalledTimes(1)
+    expect(unhandledFn.mock.calls[0][0].toString()).toEqual(
+      'TypeError [ERR_INVALID_ARG_TYPE]: The "chunk" argument must be of type string or an instance of Buffer or Uint8Array. Received type number (1)'
+    )
   })
-})
+)
