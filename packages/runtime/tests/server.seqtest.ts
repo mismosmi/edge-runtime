@@ -134,27 +134,28 @@ test(`allows to wait for effects created with waitUntil`, async () => {
   expect(resolved).toContain('done')
 })
 
-// CF only allows Uint8Array to be written to readable stream
-const crazyTypes: unknown[] = [
-  1,
-  'String',
-  true,
-  // ignore we currently don't know what Err CF emits for undefined,
-  // ignore we currently don't know what Err CF emits for null,
-  { b: 1 },
-  [1],
-]
-for (const crazyType of crazyTypes) {
-  test(
-    `fails when writing to the response socket throws:${JSON.stringify(
-      crazyType
-    )}`,
-    enableTestUncaughtException(async (process) => {
-      const unhandledFn = jest.fn()
-      process!.on('unhandledRejection', unhandledFn)
+describe(`simulate CF Uint8Array Streams`, () => {
+  // CF only allows Uint8Array to be written to readable stream
+  const crazyTypes: unknown[] = [
+    1,
+    'String',
+    true,
+    // ignore we currently don't know what Err CF emits for undefined,
+    // ignore we currently don't know what Err CF emits for null,
+    { b: 1 },
+    [1],
+  ]
+  for (const crazyType of crazyTypes) {
+    test(
+      `fails when writing to the response socket throws:${JSON.stringify(
+        crazyType
+      )}`,
+      enableTestUncaughtException(async (process) => {
+        const unhandledFn = jest.fn()
+        process!.on('unhandledRejection', unhandledFn)
 
-      const runtime = new EdgeRuntime()
-      runtime.evaluate(`
+        const runtime = new EdgeRuntime()
+        runtime.evaluate(`
         addEventListener('fetch', event => {
           const readable = new ReadableStream({
             start(controller) {
@@ -172,28 +173,28 @@ for (const crazyType of crazyTypes) {
           )
         })
       `)
-      server = await runServer({ runtime })
-      const response = await fetch(server.url)
-      expect(response.status).toEqual(200)
-      const text = await response.text()
-      expect(text).toEqual('hi there')
+        server = await runServer({ runtime })
+        const response = await fetch(server.url)
+        expect(response.status).toEqual(200)
+        const text = await response.text()
+        expect(text).toEqual('hi there')
 
-      expect(unhandledFn).toHaveBeenCalledTimes(1)
-      expect(unhandledFn.mock.calls[0][0].toString()).toEqual(
-        'TypeError: This ReadableStream did not return bytes.'
-      )
-    })
-  )
-}
+        expect(unhandledFn).toHaveBeenCalledTimes(1)
+        expect(unhandledFn.mock.calls[0][0].toString()).toEqual(
+          'TypeError: This ReadableStream did not return bytes.'
+        )
+      })
+    )
+  }
 
-test(
-  `do not fail writing to the response socket Uint8Array`,
-  enableTestUncaughtException(async (process) => {
-    const unhandledFn = jest.fn()
-    process!.on('unhandledRejection', unhandledFn)
+  test(
+    `do not fail writing to the response socket Uint8Array`,
+    enableTestUncaughtException(async (process) => {
+      const unhandledFn = jest.fn()
+      process!.on('unhandledRejection', unhandledFn)
 
-    const runtime = new EdgeRuntime()
-    runtime.evaluate(`
+      const runtime = new EdgeRuntime()
+      runtime.evaluate(`
       addEventListener('fetch', event => {
         const readable = new ReadableStream({
           start(controller) {
@@ -213,12 +214,13 @@ test(
         )
       })
     `)
-    server = await runServer({ runtime })
-    const response = await fetch(server.url)
-    expect(response.status).toEqual(200)
-    const text = await response.text()
-    expect(text).toEqual('hi there1\nhi there2\nhi there3\n')
+      server = await runServer({ runtime })
+      const response = await fetch(server.url)
+      expect(response.status).toEqual(200)
+      const text = await response.text()
+      expect(text).toEqual('hi there1\nhi there2\nhi there3\n')
 
-    expect(unhandledFn).toHaveBeenCalledTimes(0)
-  })
-)
+      expect(unhandledFn).toHaveBeenCalledTimes(0)
+    })
+  )
+})
