@@ -144,6 +144,7 @@ describe(`simulate CF Uint8Array Streams`, () => {
     // ignore we currently don't know what Err CF emits for null,
     { b: 1 },
     [1],
+    Buffer.from('Buffer'), // this is node specific
   ]
   for (const crazyType of crazyTypes) {
     test(
