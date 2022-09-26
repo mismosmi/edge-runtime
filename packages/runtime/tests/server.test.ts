@@ -147,16 +147,11 @@ describe(`simulate CF Uint8Array Streams`, () => {
     Buffer.from('Buffer'), // this is node specific
   ]
   for (const crazyType of crazyTypes) {
-    test(
-      `fails when writing to the response socket throws:${JSON.stringify(
-        crazyType
-      )}`,
-      enableTestUncaughtException(async (process) => {
-        const unhandledFn = jest.fn()
-        process!.on('unhandledRejection', unhandledFn)
-
-        const runtime = new EdgeRuntime()
-        runtime.evaluate(`
+    test(`fails when writing to the response socket throws:${JSON.stringify(
+      crazyType
+    )}`, async () => {
+      const runtime = new EdgeRuntime()
+      runtime.evaluate(`
         addEventListener('fetch', event => {
           const readable = new ReadableStream({
             start(controller) {
@@ -174,28 +169,25 @@ describe(`simulate CF Uint8Array Streams`, () => {
           )
         })
       `)
-        server = await runServer({ runtime })
-        const response = await fetch(server.url)
-        expect(response.status).toEqual(200)
-        const text = await response.text()
-        expect(text).toEqual('hi there')
-
-        expect(unhandledFn).toHaveBeenCalledTimes(1)
-        expect(unhandledFn.mock.calls[0][0].toString()).toEqual(
-          'TypeError: This ReadableStream did not return bytes.'
+      server = await runServer({ runtime })
+      const response = await fetch(server.url)
+      expect(response.status).toEqual(200)
+      const text = await response.text()
+      expect(text.startsWith('hi there')).toBeTruthy()
+      expect(
+        text.match(
+          /Vercel Runtime Error -- ResponseStream contains not a Uint8Array/g
         )
-      })
-    )
+      ).toEqual([
+        'Vercel Runtime Error -- ResponseStream contains not a Uint8Array',
+        'Vercel Runtime Error -- ResponseStream contains not a Uint8Array',
+      ])
+    })
   }
 
-  test(
-    `do not fail writing to the response socket Uint8Array`,
-    enableTestUncaughtException(async (process) => {
-      const unhandledFn = jest.fn()
-      process!.on('unhandledRejection', unhandledFn)
-
-      const runtime = new EdgeRuntime()
-      runtime.evaluate(`
+  test(`do not fail writing to the response socket Uint8Array`, async () => {
+    const runtime = new EdgeRuntime()
+    runtime.evaluate(`
       addEventListener('fetch', event => {
         const readable = new ReadableStream({
           start(controller) {
@@ -215,13 +207,10 @@ describe(`simulate CF Uint8Array Streams`, () => {
         )
       })
     `)
-      server = await runServer({ runtime })
-      const response = await fetch(server.url)
-      expect(response.status).toEqual(200)
-      const text = await response.text()
-      expect(text).toEqual('hi there1\nhi there2\nhi there3\n')
-
-      expect(unhandledFn).toHaveBeenCalledTimes(0)
-    })
-  )
+    server = await runServer({ runtime })
+    const response = await fetch(server.url)
+    expect(response.status).toEqual(200)
+    const text = await response.text()
+    expect(text).toEqual('hi there1\nhi there2\nhi there3\n')
+  })
 })

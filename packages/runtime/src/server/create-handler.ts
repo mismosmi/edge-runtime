@@ -67,31 +67,29 @@ export function createHandler<T extends EdgeContext>(options: Options<T>) {
         }
 
         if (response.body) {
-          for await (const chunk of response.body as any) {
+          for await (let chunk of response.body as any) {
             // no better idea than use name
-            if (chunk.constructor.name === 'Uint8Array') {
-              await new Promise<void>((resolve, reject) => {
-                res.write(chunk, (err) => {
-                  if (err) {
-                    reject(err)
-                  } else {
-                    resolve()
-                  }
-                })
-              })
-            } else {
-              await new Promise<void>((resolve) => {
-                res.end(() => {
-                  resolve()
-                  // make it unbound
-                  new Promise(() => {
-                    throw new TypeError(
-                      'This ReadableStream did not return bytes.'
-                    )
-                  })
-                })
-              })
+            if (chunk.constructor.name !== 'Uint8Array') {
+              // try to invalidate the output as destructive as possible
+              const err = `[Vercel Runtime Error -- ResponseStream contains not a Uint8Array:${typeof chunk}.]`
+              chunk = new TextEncoder().encode(
+                `\n<div>
+                  ${'*'.repeat(100)}</br>
+                  ${err}</br>
+                  ${'*'.repeat(100)}</br>
+                </div>
+                <script>alert(${err})</script>\n`
+              )
             }
+            await new Promise<void>((resolve, reject) => {
+              res.write(chunk, (err) => {
+                if (err) {
+                  reject(err)
+                } else {
+                  resolve()
+                }
+              })
+            })
           }
         }
 
