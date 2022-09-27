@@ -11,6 +11,8 @@ import * as WebIDLModule from 'undici/lib/fetch/webidl'
 import fetchImpl from 'undici/lib/fetch'
 import Agent from 'undici/lib/agent'
 
+import * as TypedUint8ArrayResponse from './response'
+
 global.AbortController = AbortController
 global.AbortSignal = AbortSignal
 
@@ -189,6 +191,8 @@ export function setGlobalDispatcher(agent) {
  * It also re-cretates a new Response object in order to allow mutations on
  * the Response headers.
  */
+export const Response = TypedUint8ArrayResponse.Response
+
 export async function fetch() {
   const res = await fetchImpl.apply(getGlobalDispatcher(), arguments)
   const response = new Response(res.body, res)
@@ -197,7 +201,6 @@ export async function fetch() {
 }
 
 export const Headers = HeadersModule.Headers
-export const Response = ResponseModule.Response
 
 export { FormData } from 'undici/lib/fetch/formdata'
 export { Request } from 'undici/lib/fetch/request'

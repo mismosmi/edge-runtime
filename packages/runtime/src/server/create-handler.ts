@@ -68,30 +68,15 @@ export function createHandler<T extends EdgeContext>(options: Options<T>) {
 
         if (response.body) {
           for await (const chunk of response.body as any) {
-            // no better idea than use name
-            if (chunk.constructor.name === 'Uint8Array') {
-              await new Promise<void>((resolve, reject) => {
-                res.write(chunk, (err) => {
-                  if (err) {
-                    reject(err)
-                  } else {
-                    resolve()
-                  }
-                })
-              })
-            } else {
-              await new Promise<void>((resolve) => {
-                res.end(() => {
+            await new Promise<void>((resolve, reject) => {
+              res.write(chunk, (err) => {
+                if (err) {
+                  reject(err)
+                } else {
                   resolve()
-                  // make it unbound
-                  new Promise(() => {
-                    throw new TypeError(
-                      'This ReadableStream did not return bytes.'
-                    )
-                  })
-                })
+                }
               })
-            }
+            })
           }
         }
 
